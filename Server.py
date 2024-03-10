@@ -5,37 +5,59 @@ SERVER_HOST = "127.0.0.1"
 SERVER_PORT = 15000
 
 class ChatUsingThread(Thread):
+    should_continue = True 
+
     def __init__(self, connection):
-        Thread.__init__(self)
+        super().__init__()
         self.connection = connection
 
     def run(self):
         name = current_thread().getName()
-        while True:
-            if name == "Sender":
-                data = input("Server: ")
-                self.connection.send(bytes(data, "utf-8"))
-            elif name == "Receiver":
-                recData = self.connection.recv(1024).decode()
-                if recData.lower() == "quit":
-                    print("Client has closed the connection.")
-                    self.connection.close()
-                    break
-                print("Client: ", recData)
+        while ChatUsingThread.should_continue:  
+            try:
+                if name == "Sender":
+                    data = input("You: ")
+                    self.connection.sendall(bytes(data, "utf-8"))
+                    if data.lower() == "quit":
+                        print("Closing the connection...")
+                        self.connection.close()
+                        ChatUsingThread.should_continue = False  
+                        break
+                elif name == "Receiver":
+                    recData = self.connection.recv(1024).decode()
+                    if recData.lower() == "quit":
+                        print("Client has closed the connection.")
+                        self.connection.close()
+                        ChatUsingThread.should_continue = False  
+                        break
+                    print("Client: ", recData)
+            except Exception as e:
+                print("An error occurred:", e)
+                break
 
+try:
+    server_socket = socket(AF_INET, SOCK_STREAM)
+    server_socket.bind((SERVER_HOST, SERVER_PORT))
+    server_socket.listen(1)
+    print("Server is listening...")
 
-server = socket(AF_INET, SOCK_STREAM)
-server.bind((SERVER_HOST, SERVER_PORT))
-server.listen(4)
+    connection, address = server_socket.accept()
+    print("Connected to:", address)
 
-print("Server is listening...")
+    sender = ChatUsingThread(connection)
+    sender.setName("Sender")
+    receiver = ChatUsingThread(connection)
+    receiver.setName("Receiver")
 
-connection, address = server.accept()
+    sender.start()
+    receiver.start()
 
-sender = ChatUsingThread(connection)
-sender.setName("Sender")
-receiver = ChatUsingThread(connection)
-receiver.setName("Receiver")
+    
+    sender.join()
+    receiver.join()
 
-sender.start()
-receiver.start()
+    print("Connection closed.")
+except Exception as e:
+    print("An error occurred:", e)
+finally:
+    print("Server is shutting down...")
